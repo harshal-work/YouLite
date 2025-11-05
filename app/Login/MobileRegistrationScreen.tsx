@@ -16,7 +16,16 @@ import { router } from "expo-router";
 import Colors from "@/utils/Colors";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
-import { messaging, getToken } from "../../utils/firebaseConfig"; // correct relative path
+import { app } from "../../utils/firebaseConfig"; // ✅ only Firebase core
+
+// ✅ Configure notification handling
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const MobileRegistrationScreen: React.FC = () => {
   const [mobile, setMobile] = useState("");
@@ -29,47 +38,41 @@ const MobileRegistrationScreen: React.FC = () => {
     registerForPushNotificationsAsync();
   }, []);
 
+  // ✅ Native push registration (works for Android/iOS)
   const registerForPushNotificationsAsync = async () => {
-    if (!Device.isDevice) {
-      console.log("Push notifications: must use a physical device");
-      return;
-    }
-
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== "granted") {
-      console.log("Notification permission not granted!");
-      return;
-    }
-
     try {
-      const expoToken = (await Notifications.getDevicePushTokenAsync()).data;
+      if (!Device.isDevice) {
+        console.log("Push notifications: must use a physical device");
+        return;
+      }
+
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== "granted") {
+        console.log("Notification permission not granted!");
+        return;
+      }
+
+      // ✅ Get native device push token (FCM or APNs under the hood)
+      const pushTokenData = await Notifications.getDevicePushTokenAsync();
+      console.log("Device Push Token (FCM/APNs):", pushTokenData.data);
+
+      // Optional: get Expo token for testing via Expo push service
+      const expoToken = (
+        await Notifications.getExpoPushTokenAsync({
+          projectId: "80955700657", // Your Firebase project number works fine here
+        })
+      ).data;
       console.log("Expo Push Token:", expoToken);
-    } catch (err) {
-      console.log("Error getting Expo push token:", err);
+    } catch (error) {
+      console.log("Error registering for push notifications:", error);
     }
-
-    try {
-      const fcmToken = await getToken(messaging, {
-        vapidKey:
-          "BHwXzTi3L5ak4p08dX0QlpTXu18IUrVpDQIVszL0injYiwA0nxMBstC6fIGmu6ADlmjIgnWK_uwUqloNpj9X-jM",
-      });
-      console.log("FCM Token:", fcmToken);
-    } catch (err) {
-      console.log("Error getting FCM token:", err);
-    }
-
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
-      }),
-    });
   };
 
   const handleSkip = () => router.replace("/(tabs)");
@@ -154,9 +157,7 @@ const MobileRegistrationScreen: React.FC = () => {
             <Ionicons name="phone-portrait-outline" size={80} color={Colors.PRIMARY} />
           </View>
           <Text style={styles.title}>Mobile Verification</Text>
-          <Text style={styles.subtitle}>
-            Enter your mobile number and create account
-          </Text>
+          <Text style={styles.subtitle}>Enter your mobile number and create account</Text>
         </View>
 
         <View style={styles.formContainer}>
@@ -245,9 +246,7 @@ const MobileRegistrationScreen: React.FC = () => {
 
           <View style={styles.infoContainer}>
             <Ionicons name="shield-checkmark" size={16} color={Colors.PRIMARY} />
-            <Text style={styles.infoText}>
-              Your information is safe and secure
-            </Text>
+            <Text style={styles.infoText}>Your information is safe and secure</Text>
           </View>
         </View>
 
